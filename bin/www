@@ -1,0 +1,123 @@
+#!/usr/bin/env node
+
+/**
+ * Module dependencies.
+ */
+
+const app = require('../app');
+const debug = require('debug')('demo:server');
+const http = require('http');
+const cluster = require('cluster');
+
+/**
+ * Get port from environment and store in Express.
+ */
+
+const port = normalizePort(process.env.PORT || '3000');
+// app.set('port', port);
+
+
+const cpuNum = require('os').cpus().length
+
+if(cluster.isMaster) {
+  for (let i=0; i < cpuNum; i++) {
+    cluster.fork();
+  }
+  // 监听worker
+  cluster.on("listening", function (worker, address) {
+    console.log(
+        "listening: worker " +
+        worker.process.pid +
+        ", Address: " +
+        address.address +
+        ":" +
+        address.port +
+        "," +
+        address.addressType
+    );
+  });
+
+  // 监听worker退出事件，code进程非正常退出的错误code，signal导致进程被杀死的信号名称
+  cluster.on("exit", function (worker, code, signal) {
+    console.log(
+        "工作进程 %d 关闭 (%s)(%s). 重启中...",
+        worker.process.pid,
+        signal || code
+    );
+
+    cluster.fork();
+  });
+} else {
+  /**
+   * Create HTTP server.
+   */
+
+  const server = http.createServer(app.callback());
+
+  /**
+   * Listen on provided port, on all network interfaces.
+   */
+
+  server.listen(port);
+  server.on('error', onError);
+  server.on('listening', onListening);
+
+  /**
+   * Event listener for HTTP server "error" event.
+   */
+
+  function onError(error) {
+    if (error.syscall !== 'listen') {
+      throw error;
+    }
+
+    const bind = typeof port === 'string'
+        ? 'Pipe ' + port
+        : 'Port ' + port;
+
+    // handle specific listen errors with friendly messages
+    switch (error.code) {
+      case 'EACCES':
+        console.error(bind + ' requires elevated privileges');
+        process.exit(1);
+        break;
+      case 'EADDRINUSE':
+        console.error(bind + ' is already in use');
+        process.exit(1);
+        break;
+      default:
+        throw error;
+    }
+  }
+
+  /**
+   * Event listener for HTTP server "listening" event.
+   */
+
+  function onListening() {
+    const addr = server.address();
+    const bind = typeof addr === 'string'
+        ? 'pipe ' + addr
+        : 'port ' + addr.port;
+    debug('Listening on ' + bind);
+  }
+}
+/**
+ * Normalize a port into a number, string, or false.
+ */
+
+function normalizePort(val) {
+  const port = parseInt(val, 10);
+
+  if (isNaN(port)) {
+    // named pipe
+    return val;
+  }
+
+  if (port >= 0) {
+    // port number
+    return port;
+  }
+
+  return false;
+}
